@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SprintTrack</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;600&display=swap">
+<style>
+:root{--bg:#f2f0ea;--fg:#15171a;--mut:#5d6168;--ln:#d4d1c8;--acc:#e39a00;--ink:#1a1200;--ok:#1d7a38;--bad:#b3261e;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101214;--fg:#ece9e0;--mut:#8d9096;--ln:#2a2d32;--acc:#ffb000;--ok:#7bd88f;--bad:#ff7a6b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101214;--fg:#ece9e0;--mut:#8d9096;--ln:#2a2d32;--acc:#ffb000;--ok:#7bd88f;--bad:#ff7a6b;color-scheme:dark}
+*,*:before,*:after{box-sizing:inherit}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.45 Barlow,system-ui,sans-serif}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+main{max-width:34rem;margin:0 auto;padding:1.25rem 1.25rem 3rem}
+h1,h2{font-family:"Barlow Condensed","Arial Narrow",sans-serif;margin:0;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.4rem;margin:2rem 0 .5rem}
+.num{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-variant-numeric:tabular-nums;line-height:.9}
+.hero{font-size:min(30vw,9.5rem);margin:.5rem 0 .25rem}
+.mut{color:var(--mut)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;padding:.6rem 0;border-bottom:1px solid var(--ln)}
+.row .num{font-size:1.7rem}
+button,.btn{font:600 1rem Barlow,system-ui,sans-serif;min-height:48px;padding:0 1.25rem;border-radius:6px;border:1px solid var(--ln);background:none;color:var(--fg);cursor:pointer}
+button.p{background:var(--acc);border-color:var(--acc);color:var(--ink)}
+button:disabled{opacity:.45}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+label{display:block;margin:1.1rem 0 .35rem;font-weight:600}
+input[type=text],input[type=number]{width:100%;min-height:48px;font:inherit;padding:0 .75rem;border-radius:6px;border:1px solid var(--ln);background:none;color:var(--fg)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.chips button{min-width:56px;padding:0 .9rem}
+.chips button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.modes label{display:flex;gap:.6rem;align-items:flex-start;margin:.5rem 0;font-weight:400}
+.modes input{margin-top:.35rem}
+.live{position:fixed;inset:0;background:#000;color:#ece9e0;touch-action:none;z-index:5}
+.live video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.stage{position:absolute;inset:0}
+.line{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:#ffb000;box-shadow:0 0 0 1px #0008}
+.line:after{content:"";position:absolute;top:50%;left:-19px;width:41px;height:41px;margin-top:-20px;border-radius:50%;border:3px solid #ffb000;background:#0006}
+.top,.bot{position:absolute;left:0;right:0;display:flex;gap:.75rem;align-items:center;padding:.75rem 1rem;background:#000a;z-index:2}
+.top{top:0;padding-top:calc(.75rem + env(safe-area-inset-top,0px))}
+.bot{bottom:0;padding-bottom:calc(.75rem + env(safe-area-inset-bottom,0px));flex-direction:column;align-items:stretch}
+.live button{color:#ece9e0;border-color:#555}.live button.p{color:#1a1200;border-color:#ffb000}
+.live .big{min-height:64px;font-size:1.25rem}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--bg);color:var(--fg);padding:1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom,0px));z-index:4;border-top:3px solid var(--acc)}
+.sheet .hero{font-size:6.5rem;margin:0}
+.flag{color:var(--bad);font-weight:600;margin:.4rem 0}
+.sheet .two{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1rem}
+.sheet button{color:var(--fg);border-color:var(--ln)}.sheet button.p{color:var(--ink);border-color:var(--acc)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.small{font-size:.9rem}
+.qr{background:#fff;padding:12px;border-radius:8px;width:min(86vw,340px);margin:1rem auto}.qr svg{display:block;width:100%;height:auto}
+.scan{width:min(86vw,340px);aspect-ratio:1;margin:1rem auto;background:#000;border-radius:8px;overflow:hidden}.scan video{width:100%;height:100%;object-fit:cover}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+</head>
+<body>
+<main id="app"></main>
+<script>
+/* ---------- 1. Timing maths (pure) ---------- */
+const T = {
+  // offset = guest clock minus host clock, from one ping/pong
+  offset:(t1,t2,t3,t4)=>((t2-t1)+(t3-t4))/2,
+  rtt:(t1,t2,t3,t4)=>(t4-t1)-(t3-t2),
+  median:a=>{const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2},
+  // guest stamp -> host clock is (g - offset). The brief wrote (start + offset); the worked check in selfTest shows that sign is wrong.
+  elapsed:(guestStart,hostFinish,offset=0)=>(hostFinish-(guestStart-offset))/1000,
+  sync:s=>({offset:T.median(s.map(x=>x.o)),rtt:T.median(s.map(x=>x.r)),n:s.length}),
+  speed:(d,s)=>d/s,
+  kmh:ms=>ms*3.6,
+  fmt:s=>s.toFixed(3),
+  flags:(d,s)=>{const f=[],v=d/s;if(s<=0)f.push("Negative interval: the finish came before the start.");else{if(d>=10&&s<.4)f.push("Under 0.4 s: check the line setup.");if(v>13)f.push("Over 13 m/s: faster than elite sprinting. Check the distance and line.")}return f},
+  bests:att=>{const b={};for(const a of att)if(a.ok){const k=a.athlete+"|"+a.d;if(!b[k]||a.elapsed<b[k].elapsed)b[k]=a}return Object.values(b)}
+};
+const cameraMessage=n=>({NotAllowedError:"Camera access was blocked. Allow the camera for this page in your browser settings, then try again.",NotFoundError:"No camera found on this device.",NotReadableError:"The camera is in use by another app. Close it and try again.",Unsupported:"Camera not supported here. Open this page directly in Safari or Chrome over https."}[n]||"The camera couldn’t be opened ("+n+"). Open this page directly in your phone browser and try again.");
+
+/* ---------- 2. Crossing tracker (pure, no camera) ---------- */
+class Tracker{
+  constructor(o){this.o=Object.assign({line:.5,need:3,minConf:.4,gap:350,cool:1400},o);this.reset()}
+  reset(){this.prev=null;this.run=0;this.side=0;this.stable=null;this.quiet=-1e9}
+  update(x,t,c=1){
+    const o=this.o;
+    if(x==null||c<o.minConf)return null;
+    const s=x>=o.line?1:-1;
+    if(t<this.quiet){this.prev={x,t};this.side=s;this.run=1;this.stable=null;return null}
+    let hit=null;
+    if(s===this.side)this.run++;
+    else{
+      const st=this.stable;
+      if(st&&st.side!==s&&t-st.t<=o.gap&&this.prev){
+        const p=this.prev,f=Math.min(1,Math.max(0,(o.line-p.x)/(x-p.x)));
+        hit={t:p.t+f*(t-p.t)};this.quiet=t+o.cool;this.stable=null;
+      }
+      this.side=s;this.run=1;
+    }
+    if(!hit&&this.run>=o.need)this.stable={side:s,t};
+    this.prev={x,t};return hit;
+  }
+}
+// sensitivity 0 (strict) .. 1 (loose); default sits slightly loose
+const sensOpts=s=>({need:Math.round(5-3*s),minConf:+(.6-.4*s).toFixed(2),minMass:.04-.03*s});
+
+function selfTest(){
+  const r=[],run=(xs,dt=33.3,o)=>{const tr=new Tracker(o);let h=[];xs.forEach((x,i)=>{const k=tr.update(x,i*dt);if(k)h.push(k.t)});return h};
+  const ramp=(a,b,n)=>Array.from({length:n},(_,i)=>a+(b-a)*i/(n-1));
+  let h=run(ramp(.1,.9,31));
+  r.push(["Interpolates crossing between frames",h.length===1&&Math.abs(h[0]-500)<1]);
+  r.push(["Ignores a detection that appears past the line",run(ramp(.8,.95,20)).length===0]);
+  r.push(["Goes quiet for 1.4 s after a hit",run([...ramp(.1,.9,31),...ramp(.9,.1,31)]).length===1]);
+  const o=T.offset(1000,510,511,1021);
+  r.push(["Clock offset recovers a 500 ms difference",o===-500&&T.rtt(1000,510,511,1021)===20]);
+  r.push(["Elapsed on one clock: start 2000, finish 3320 is 1.320 s",T.elapsed(2000-500,3320,-500)===1.32]);
+  r.push(["Speed: 10 m in 1.32 s is 7.576 m/s",T.fmt(T.speed(10,1.32)*1)==="7.576"]);
+  return r;
+}
+
+/* ---------- storage ---------- */
+let S={attempts:[],line:.5,athlete:"",d:20,sens:.6};
+try{const j=localStorage.getItem("sprinttrack");if(j)S=Object.assign(S,JSON.parse(j))}catch(e){}
+const save=()=>{try{localStorage.setItem("sprinttrack",JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s),app=$("#app");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- views ---------- */
+function board(){
+  const acc=S.attempts.filter(a=>a.ok),last=acc[0],tests=selfTest(),pass=tests.filter(t=>t[1]).length;
+  const best=T.bests(S.attempts).sort((a,b)=>a.d-b.d||a.elapsed-b.elapsed);
+  const rows=(list)=>list.map(a=>`<div class="row"><span>${esc(a.athlete)}<br><span class="mut small">${a.d} m, ${T.fmt(T.speed(a.d,a.elapsed)*3.6).slice(0,-1)} km/h</span></span><span class="num">${T.fmt(a.elapsed)}</span></div>`).join("");
+  app.innerHTML=`
+  <div class="mut">${last?esc(last.athlete)+", "+last.d+" m, last accepted time":"No accepted times yet"}</div>
+  <div class="num hero">${last?T.fmt(last.elapsed):"0.000"}<span class="mut" style="font-size:.3em"> s</span></div>
+  <div style="display:flex;gap:.75rem"><button class="p" id="new" style="flex:1">New session</button><button id="cam">Open camera</button></div><button id="join" style="margin-top:.75rem;width:100%">Join a session as the start phone</button><p class="mut small" id="cerr" role="alert"></p>
+  ${acc.length?`<h2>Recent attempts</h2>${rows(acc.slice(0,6))}<h2>Personal bests</h2>${rows(best)}`:
+  `<p class="mut">Accepted runs appear here. Open the camera to check the line, or start a session.</p>`}
+  <h2>Timing engine checks</h2>
+  <p class="${pass===tests.length?"ok":"bad"}" style="margin:.2rem 0">${pass} of ${tests.length} passing</p>
+  ${tests.map(t=>`<div class="small ${t[1]?"mut":"bad"}">${t[1]?"Pass":"Fail"}: ${t[0]}</div>`).join("")}
+  <h2>Put the app on the other phone</h2><p class="mut small" style="margin:.2rem 0">Scan this with the other phone’s normal camera to open the app. If there is no code, paste this page’s link below once.</p><div id="lq"></div><input type="text" id="lk" aria-label="This page’s link" placeholder="Paste this page’s link"><p class="mut small">Two phones: start a session on the finish phone in Two cameras or Start trigger mode, then tap Join a session on the start phone. You scan each other’s codes once. Both phones need the same Wi‑Fi, or one on the other’s hotspot.</p>`;
+  $("#new").onclick=form;$("#cam").onclick=()=>openCamera($("#cerr"));$("#join").onclick=()=>openCamera($("#cerr"),guestPair);
+  const lk=$("#lk"),lq=$("#lq"),draw=()=>{const u=lk.value.trim();lq.innerHTML=/^https?:\/\//.test(u)&&typeof qrcode==="function"?`<div class="qr">${qrSvg(u)}</div>`:""};
+  lk.value=shareLink(S.link,self===top,location.href);lk.oninput=()=>{S.link=lk.value.trim();save();draw()};draw();
+}
+
+function form(){
+  const names=[...new Set(S.attempts.map(a=>a.athlete))];
+  app.innerHTML=`<h1>New session</h1>
+  <form id="f" onsubmit="return false">
+  <label for="ath">Athlete</label>
+  <input type="text" id="ath" list="al" value="${esc(S.athlete)}" autocomplete="off"><datalist id="al">${names.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>
+  <label>Distance (m)</label>
+  <div class="chips" id="ch">${[10,20,30,40,60,100].map(d=>`<button type="button" data-d="${d}" aria-pressed="${d===S.d}">${d}</button>`).join("")}</div>
+  <input type="number" id="dist" min="1" step="any" value="${S.d}" aria-label="Typed distance in metres" style="margin-top:.5rem">
+  <label>Mode</label>
+  <div class="modes">
+   <label><input type="radio" name="m" value="dual" checked> <span>Two cameras (this is the finish phone)<br><span class="mut small">Both phones time the crossing. You pair them with a code on screen.</span></span></label>
+   <label><input type="radio" name="m" value="trigger"> <span>Start trigger (this is the finish phone)<br><span class="mut small">The start phone is a button. This phone’s camera times the finish.</span></span></label>
+   <label><input type="radio" name="m" value="solo"> <span>This phone<br><span class="mut small">Tap at the start. The camera times the finish.</span></span></label>
+  </div>
+  <label for="sens">Sensitivity</label>
+  <input type="range" id="sens" min="0" max="1" step=".05" value="${S.sens}">
+  <div class="mut small" style="display:flex;justify-content:space-between"><span>Stricter</span><span>Looser</span></div>
+  <div style="display:flex;gap:.75rem;margin-top:1.5rem"><button class="p" id="go" style="flex:1">Open camera</button><button type="button" id="bk">Cancel</button></div>
+  <p class="mut small" id="err" role="alert"></p></form>`;
+  $("#ch").onclick=e=>{const b=e.target.closest("button");if(!b)return;$("#dist").value=b.dataset.d;[...$("#ch").children].forEach(c=>c.setAttribute("aria-pressed",c===b))};
+  $("#dist").oninput=e=>[...$("#ch").children].forEach(c=>c.setAttribute("aria-pressed",c.dataset.d===e.target.value));
+  $("#bk").onclick=board;
+  $("#go").onclick=async()=>{ // opened from a tap, as mobile browsers require
+    const d=parseFloat($("#dist").value);
+    if(!(d>0)){$("#err").textContent="Enter a distance above 0 m.";return}
+    S.athlete=$("#ath").value.trim()||"Athlete";S.d=d;S.sens=parseFloat($("#sens").value);save();
+    const mode=document.querySelector("input[name=m]:checked").value;
+    openCamera($("#err"),mode==="solo"?undefined:s=>hostPair({mode,athlete:S.athlete,d:S.d},s));
+  };
+}
+
+// Must be called from a tap: mobile browsers refuse the camera on page load.
+async function openCamera(errEl,then){
+  errEl.textContent="";
+  const md=navigator.mediaDevices;
+  if(!md||!md.getUserMedia){errEl.textContent=cameraMessage("Unsupported");return}
+  try{
+    let s;
+    try{s=await md.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},frameRate:{ideal:60}},audio:false})}
+    catch(e){if(e&&e.name==="OverconstrainedError")s=await md.getUserMedia({video:true,audio:false});else throw e}
+    (then||live)(s);
+  }catch(e){errEl.textContent=cameraMessage(e&&e.name||"error")}
+}
+
+/* ---------- 4-6. Pairing by QR (no server), clock sync, link ---------- */
+const b64=u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const pack=async o=>b64(new Uint8Array(await new Response(new Blob([JSON.stringify(o)]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()));
+const unpack=async s=>JSON.parse(await new Response(new Blob([Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text());
+const slim=d=>({type:d.type,sdp:d.sdp.split('\r\n').filter(l=>!l.startsWith('a=candidate')||(/ udp /i.test(l)&&!l.split(' ')[4].includes(':'))).join('\r\n')});
+const gathered=pc=>new Promise(r=>{const f=()=>{if(pc.iceGatheringState==='complete'){pc.removeEventListener('icegatheringstatechange',f);r()}};if(pc.iceGatheringState==='complete')return r();pc.addEventListener('icegatheringstatechange',f);setTimeout(r,3000)});
+function mkLink(pc,dc){
+  const L={pc,dc,samples:[],onmsg:null,onclose:null,open:()=>dc.readyState==='open',send:o=>{try{dc.send(JSON.stringify(o))}catch(e){}},sync:()=>T.sync(L.samples)};
+  dc.onmessage=e=>{const t=performance.now(),m=JSON.parse(e.data); // read the clock before anything else
+    if(m.k==='ping'){const t3=performance.now();L.send({k:'pong',t1:m.t1,t2:t,t3});return}
+    if(m.k==='pong'){L.samples.push({o:T.offset(m.t1,m.t2,m.t3,t),r:T.rtt(m.t1,m.t2,m.t3,t)});if(L.samples.length>15)L.samples.shift();return}
+    L.onmsg&&L.onmsg(m)};
+  dc.onclose=()=>L.onclose&&L.onclose();
+  return L}
+const qrSvg=s=>{const q=qrcode(0,'L');q.addData(s);q.make();return q.createSvgTag({scalable:true,margin:0})};
+function scanQR(stream,box){return new Promise(res=>{
+  const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;v.play().catch(()=>{});box.innerHTML='';box.appendChild(v);
+  const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  const tick=()=>{if(!v.isConnected)return;
+    if(v.videoWidth){const w=480,h=Math.round(w*v.videoHeight/v.videoWidth);c.width=w;c.height=h;x.drawImage(v,0,0,w,h);
+      const r=jsQR(x.getImageData(0,0,w,h).data,w,h,{inversionAttempts:'dontInvert'});if(r&&r.data){res(r.data);return}}
+    requestAnimationFrame(tick)};tick()})}
+async function hostPair(cfg,stream){
+  const pc=new RTCPeerConnection({iceServers:[]}),dc=pc.createDataChannel('st'),link=mkLink(pc,dc);
+  app.innerHTML=`<h1>Host session</h1><p id="ps" class="mut">Preparing the code…</p><div id="qr"></div><div class="scan" id="sc" hidden></div><div style="display:flex;gap:.75rem"><button class="p" id="sn" hidden style="flex:1">Scan the start phone’s code</button><button id="bk">Cancel</button></div>`;
+  $('#bk').onclick=()=>{pc.close();stream.getTracks().forEach(t=>t.stop());board()};
+  try{await pc.setLocalDescription(await pc.createOffer());await gathered(pc);
+    $('#qr').innerHTML=`<div class="qr">${qrSvg(await pack(slim(pc.localDescription)))}</div>`;
+    $('#ps').textContent='Step 1. On the start phone, tap Join a session and scan this code. Then come back and tap the button below.';$('#sn').hidden=false}
+  catch(e){$('#ps').textContent='Could not make the code. Check that the QR library loaded, then cancel and try again.'}
+  dc.onopen=()=>{link.send({k:'cfg',mode:cfg.mode});live(stream,{role:'host',link,mode:cfg.mode})};
+  $('#sn').onclick=async()=>{$('#qr').hidden=true;$('#sn').hidden=true;$('#sc').hidden=false;$('#ps').textContent='Step 2. Point this phone at the code now showing on the start phone.';
+    const d=await scanQR(stream,$('#sc'));
+    try{await pc.setRemoteDescription(await unpack(d))}catch(e){$('#ps').textContent='That code didn’t work. Cancel and start again.'}};
+}
+async function guestPair(stream){
+  app.innerHTML=`<h1>Join a session</h1><p id="ps" class="mut">Point this phone at the code on the finish phone.</p><div class="scan" id="sc"></div><div id="qr"></div><button id="bk">Cancel</button>`;
+  const pc=new RTCPeerConnection({iceServers:[]});
+  $('#bk').onclick=()=>{pc.close();stream.getTracks().forEach(t=>t.stop());board()};
+  pc.ondatachannel=e=>{const link=mkLink(pc,e.channel);let on=false;
+    link.onmsg=m=>{if(m.k==='cfg'&&!on){on=true;live(stream,{role:'guest',link,mode:m.mode})}}};
+  const d=await scanQR(stream,$('#sc'));
+  try{await pc.setRemoteDescription(await unpack(d));await pc.setLocalDescription(await pc.createAnswer());await gathered(pc);
+    $('#sc').hidden=true;$('#ps').textContent='Hold this phone up so the finish phone can scan this code. It connects by itself.';
+    $('#qr').innerHTML=`<div class="qr">${qrSvg(await pack(slim(pc.localDescription)))}</div>`}
+  catch(e){$('#ps').textContent='That code didn’t work. Cancel and try again.'}
+}
+
+const shareLink=(saved,top,href)=>saved||(top?href.split('#')[0]:'');
+
+/* ---------- 3. One phone, end to end ---------- */
+function live(stream,ctx={role:"solo"}){
+  const role=ctx.role,link=ctx.link,mode=ctx.mode;
+  const so=sensOpts(S.sens),tr=new Tracker({line:S.line,need:so.need,minConf:so.minConf});
+  const hasRVFC="requestVideoFrameCallback" in HTMLVideoElement.prototype;
+  app.innerHTML="";
+  const el=document.createElement("div");el.className="live";
+  el.innerHTML=`<video playsinline muted autoplay></video><div class="stage"><div class="line"></div></div>
+  <div class="top"><button id="x">Close</button><div style="flex:1"><div id="st" style="font-weight:600"></div><div class="small" style="opacity:.75" id="sub">Motion engine, ${role==="guest"?"start phone":S.athlete+", "+S.d+" m"}</div></div></div>
+  <div class="bot"><div class="small" id="hint" style="opacity:.8"></div><div style="display:flex;gap:.75rem"><button class="p big" id="main" style="flex:1"></button><button id="cn" hidden>Cancel run</button></div></div>`;
+  document.body.appendChild(el);
+  const v=el.querySelector("video"),stage=el.querySelector(".stage"),ln=el.querySelector(".line");
+  v.srcObject=stream;v.play().catch(()=>{});
+  const setLine=x=>{S.line=Math.min(.95,Math.max(.05,x));tr.o.line=S.line;ln.style.left=S.line*100+"%"};setLine(S.line);
+  let drag=false;
+  stage.onpointerdown=e=>{drag=true;stage.setPointerCapture(e.pointerId);setLine(e.clientX/innerWidth)};
+  stage.onpointermove=e=>{if(drag)setLine(e.clientX/innerWidth)};
+  stage.onpointerup=()=>{drag=false;save()};
+
+  let state="idle",gen=0,t0=0,sheet=null,gotStart=null,peerOn=true,ping;
+  const subEl=el.querySelector("#sub"),sub=()=>{if(role==="solo")return;const s=link.sync();subEl.textContent=role==="guest"?"Motion engine. "+(peerOn?"Linked to the finish phone":"Link lost"):"Motion engine. "+(peerOn&&link.open()?"Start phone linked"+(s.n?`, ${s.n} clock samples, round trip ${s.rtt.toFixed(0)} ms`:", syncing clocks"):"Start phone disconnected")};
+  const st=el.querySelector("#st"),hint=el.querySelector("#hint"),main=el.querySelector("#main"),cn=el.querySelector("#cn");
+  const ui=()=>{
+    cn.hidden=state==="idle"||role==="guest";main.hidden=false;sub();
+    if(state==="idle"){st.textContent=role==="guest"?"Waiting for the host":"Not armed";hint.textContent="Drag the amber line across the lane so the athlete’s torso crosses it.";main.textContent="Arm";main.disabled=role==="host"&&!(peerOn&&link.open());main.hidden=role==="guest"}
+    else if(state==="armed"){st.textContent="Armed";const tap=role==="solo"||(role==="guest"&&mode==="trigger");hint.textContent=tap?"Tap Start the moment the athlete moves.":"Waiting for the start phone.";main.textContent=tap?"Start":"Waiting for start";main.disabled=!tap;main.hidden=role==="guest"&&!tap}
+    else if(state==="sent"){st.textContent="Start sent";hint.textContent="Start recorded. Waiting for the finish phone.";main.hidden=true}
+    else{st.textContent="Running";hint.textContent="Waiting for the torso to cross the line.";main.textContent="Timing…";main.disabled=true;main.hidden=role==="guest"}
+  };
+  main.onclick=()=>{
+    if(state==="idle"){gen++;state="armed";gotStart=null;if(role==="host")link.send({k:"arm",gen})}
+    else if(state==="armed"&&role==="solo"){t0=performance.now();tr.reset();state="running"}
+    else if(state==="armed"&&role==="guest"){link.send({k:"start",gen:ctx.gen,t:performance.now(),src:"tap"});state="sent"}
+    ui();
+  };
+  cn.onclick=()=>{gen++;state="idle";gotStart=null;if(role==="host")link.send({k:"disarm"});ui()};
+  if(link){
+    link.onclose=()=>{peerOn=false;ui()};
+    link.onmsg=m=>{
+      if(role==="guest"){
+        if(m.k==="arm"){ctx.gen=m.gen;tr.reset();state=mode==="trigger"?"armed":"running"}
+        else if(m.k==="disarm"||m.k==="done")state="idle";
+      }else if(m.k==="start"&&m.gen===gen&&state==="armed"){gotStart=m;state="running"}
+      ui();
+    };
+    if(role==="host")ping=setInterval(()=>{if(!el.isConnected){clearInterval(ping);return}link.send({k:"ping",t1:performance.now()});ui()},400);
+  }
+  ui();
+
+  // detection: frame difference on a 64x36 grey copy; the moving mass sets the tracked x
+  const W=64,H=36,cv=document.createElement("canvas");cv.width=W;cv.height=H;
+  const cx=cv.getContext("2d",{willReadFrequently:true});let last=null;
+  const proc=(now,meta)=>{
+    if(!el.isConnected)return;
+    const capture=meta&&typeof meta.captureTime==="number";
+    const t=capture?meta.captureTime:now;
+    try{
+      cx.drawImage(v,0,0,W,H);const d=cx.getImageData(0,0,W,H).data,g=new Uint8Array(W*H);
+      for(let i=0;i<W*H;i++)g[i]=(d[i*4]+d[i*4+1]*2+d[i*4+2])>>2;
+      if(last&&(role==="host"?state==="armed"||state==="running":state==="running")&&(role!=="solo"||now-t0>250)){
+        let n=0,sx=0;for(let i=0;i<W*H;i++)if(Math.abs(g[i]-last[i])>28){n++;sx+=i%W}
+        const mass=n/(W*H),x=mass>=so.minMass?sx/n/W:null,conf=Math.min(1,mass/.08);
+        const hit=tr.update(x,t,conf);
+        if(hit){const src=capture?"capture time":"callback time";
+          if(role==="solo"){if(hit.t>t0)finish(T.elapsed(t0,hit.t,0),src,{start:t0,finish:hit.t,startSrc:"tap",mode:"this-phone"})}
+          else if(role==="guest"){link.send({k:"start",gen:ctx.gen,t:hit.t,src});state="sent";ui()}
+          else if(gotStart){const sy=link.sync(),sec=T.elapsed(gotStart.t,hit.t,sy.offset);
+            if(sy.n&&sec>0)finish(sec,src,{start:gotStart.t,finish:hit.t,startSrc:gotStart.src,mode,offset:sy.offset,rtt:sy.rtt,n:sy.n})}}
+      }
+      last=g;
+    }catch(e){}
+    hasRVFC?v.requestVideoFrameCallback(proc):requestAnimationFrame(n=>proc(n));
+  };
+  hasRVFC?v.requestVideoFrameCallback(proc):requestAnimationFrame(n=>proc(n));
+
+  const close=()=>{gen++;clearInterval(ping);if(link)try{link.pc.close()}catch(e){}stream.getTracks().forEach(t=>t.stop());el.remove();board()};
+  el.querySelector("#x").onclick=close;
+
+  function finish(sec,src,m){
+    state="idle";gotStart=null;if(role==="host")link.send({k:"done"});
+    const sp=T.speed(S.d,sec),fl=T.flags(S.d,sec);
+    if(m.rtt>40)fl.push("Noisy link: round trip "+m.rtt.toFixed(0)+" ms. Consider running it again.");
+    sheet=document.createElement("div");sheet.className="sheet";
+    sheet.innerHTML=`<div class="mut">${esc(S.athlete)}, ${S.d} m</div><div class="num hero">${T.fmt(sec)}<span class="mut" style="font-size:.3em"> s</span></div>
+    <div style="font-weight:600">${sp.toFixed(2)} m/s, ${T.kmh(sp).toFixed(1)} km/h</div>${fl.map(f=>`<div class="flag">${f}</div>`).join("")}
+    <div class="mut small">Start: ${m.startSrc}. Finish: ${src}.${m.n?` Clock sync: ${m.n} samples, round trip ${m.rtt.toFixed(1)} ms.`:""}</div>
+    <div class="two"><button id="rj">Reject</button><button class="p" id="ac">Accept</button></div>`;
+    el.appendChild(sheet);
+    const done=()=>{sheet.remove();sheet=null;state="idle";ui()};
+    sheet.querySelector("#rj").onclick=done;
+    sheet.querySelector("#ac").onclick=()=>{
+      S.attempts.unshift({id:Date.now(),athlete:S.athlete,d:S.d,mode:m.mode,start:m.start,finish:m.finish,startSrc:m.startSrc,finishSrc:src,offset:m.offset??null,rtt:m.rtt??null,elapsed:sec,ok:true});save();
+      done();
+    };
+    ui();
+  }
+}
+board();
+</script>
+</body>
+</html>
